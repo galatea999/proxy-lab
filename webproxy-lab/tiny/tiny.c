@@ -94,7 +94,7 @@ void doit (int fd) {
   serve_static(fd, filename, sbuf.st_size);
 
   else 
-  serve_dynamic(fd, filename, sbuf.st_size);
+  serve_dynamic(fd, filename, cgiargs);
   
   
 }
@@ -107,6 +107,35 @@ void read_requesthdrs(rio_t *rp) { //socket stream draining
     }
   }
 
+  int parse_uri(char *uri, char *filename, char*cgiargs){ //make filename and return is_static
+
+    if (strstr(uri, "cgi-bin")) { //when dynamic, we should extract string query
+      char *ptr = strchr(uri, '?'); //string character : find specific char and return pointer of the location
+      strcpy(cgiargs, ptr+1); //if parameter were just one, you can use like *(cgiargs) = *(ptr+1); but str is multiple so use strcpy
+      *ptr = '\0'; // uri is turned into "/cgi-bin/adder\0a=1&b=2", and when meet \0, str ends. 
+      strcpy(filename, ".");
+      strcat(filename, uri);  //so filename here is just "./cgi-bin/adder"
+      return 0;
+    }
+    else{
+      strcpy(cgiargs, "");
+      strcpy(filename, ".");
+      strcat(filename, uri); // concatenate : 연쇄시키다
+      return 1;
+    }
+  }
+
+
+void get_filetype(char *filename, char *filetype){
+  if (strstr(filename, "html")) // "html" in filename?
+  strcpy(filetype, "text/html"); // strcpy(destination, str query))
+  else if (strstr(filename, "gif"))
+  strcpy(filetype, "image/gif"); //type/subtype
+  else if (strstr(filename, "jpg"))
+  strcpy(filetype, "image/jpeg");
+  else
+    strcpy(filetype, "application/octet-stream"); //Browser will down it
+}
 
   /* Serve_static To-do
   * 1. Send Header (Rio_writen)
@@ -117,10 +146,87 @@ void read_requesthdrs(rio_t *rp) { //socket stream draining
   */
 
 void serve_static(int fd, char *filename, int filesize){
-
-
-}
-
-void get_filetype(char *filename, char *filetype){
   
+// 1. Send Header using Rio_writen  
+  char buf[MAXLINE];
+  char filetype[MAXLINE];
+  get_filetype(filename, filetype);
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "Server: Tiny Web Server\r\n");
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "Content-length: %d\r\n", filesize);
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "Content-type: %s\r\n", filetype);
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "\r\n");
+  Rio_writen(fd, buf, strlen(buf)); 
+
+  // 2. Open File
+  int srcfd = open(filename, O_RDONLY, 0);
+  char *srcp = mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
+  close(srcfd);
+
+  //3 send file to socket
+  Rio_writen(fd, srcp, filesize);
+
+  //4. munmap
+  int result = munmap(srcp, filesize);
+
+
+
+
 }
+
+void serve_dynamic(int fd, char *filename, char *cgiargs){
+  /* 1. Send HTTP header to Browser
+  *  2. set QUERY_STRING using setenv
+  *  3. fork()
+  *  4. children : dup2 -> execve
+  *  5. Parent : wait until children is done
+  */
+
+  //1. Send HTTP header
+    char buf[MAXLINE];
+    char filetype[MAXLINE];
+    get_filetype(filename, filetype);
+    sprintf(buf, "HTTP/1.0 200 OK\r\n");
+    Rio_writen(fd, buf, strlen(buf)); 
+    sprintf(buf, "Server: Tiny Web Server\r\n");
+    Rio_writen(fd, buf, strlen(buf)); 
+    sprintf(buf, "Content-type: %s\r\n", filetype);
+    Rio_writen(fd, buf, strlen(buf)); 
+    sprintf(buf, "\r\n");
+    Rio_writen(fd, buf, strlen(buf)); 
+
+  //2. setenv : adder.c한테 전달하기 위해 환경변수를 설정
+  setenv("QUERY_STRING", cgiargs, 1); // /key, value, overwrite check
+  pid_t pid = fork(); //process id type
+  if (pid == 0) {
+    dup2(fd, STDOUT_FILENO);
+    char *argv[] = {filename, NULL}; //인자 없으므로 빈 값 넘김
+    execve(filename, argv, environ); //environ은 C가 제공하는 기본 전역변수. QUERY_STRING도 들어있음
+  } else {
+    waitpid(pid, NULL, 0); // 기다릴pid, 상태저장 옵션
+  }
+
+ 
+
+
+}
+
+
+void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg) {
+  char buf[MAXLINE];
+  sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "Content-type:text/html\r\n");
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "\r\n");
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "<html><b>원인 : %s</b><p>%s: %s</p></html>\r\n", cause, shortmsg, longmsg);
+  Rio_writen(fd, buf, strlen(buf)); 
+
+
+}
+
