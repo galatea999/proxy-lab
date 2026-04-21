@@ -5,12 +5,12 @@
 
 int main() {
     // 1. make socket
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0); //fd(번호표)만 받은 상태이며, 어디에도 연결 안됨. IP도 포트도 없음
 
     // 2. setting address : Where I accept (my IP)
     struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(8080); // 바이트 순서 변환
+    addr.sin_family = AF_INET; //socket에서 어떤 통신방식을 쓸지 결정한거고, addr는 실제 주소값을 담음. socket은 껍데기 생성, bind에선 실제 Ip 넣기
+    addr.sin_port = htons(8080); // 바이트 순서 변환. 내 컴퓨터는 리틀 엔디안 -> 네트워크는 빅 엔디안
     addr.sin_addr.s_addr = INADDR_ANY; // 0.0.0.0 : I will accept every IP
 
     // 3. bind : bind socket to 

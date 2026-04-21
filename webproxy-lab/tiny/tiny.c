@@ -29,7 +29,7 @@ int main(int argc, char **argv) // argument count, argument vector(array)
   {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
     exit(1);
-  }
+  } // !!! 테스트 해보기
 
   listenfd = Open_listenfd(argv[1]); 
   //helper function that do socket + bind + listen at a time
@@ -171,7 +171,7 @@ void serve_static(int fd, char *filename, int filesize){
   Rio_writen(fd, srcp, filesize);
 
   //4. munmap
-  int result = munmap(srcp, filesize);
+  munmap(srcp, filesize);
 
 
 
@@ -194,7 +194,7 @@ void serve_dynamic(int fd, char *filename, char *cgiargs){
     Rio_writen(fd, buf, strlen(buf)); 
     sprintf(buf, "Server: Tiny Web Server\r\n");
     Rio_writen(fd, buf, strlen(buf)); 
-    sprintf(buf, "Content-type: %s\r\n", filetype);
+    sprintf(buf, "Content-type: text/htmlr\n");
     Rio_writen(fd, buf, strlen(buf)); 
     sprintf(buf, "\r\n");
     Rio_writen(fd, buf, strlen(buf)); 
@@ -203,18 +203,14 @@ void serve_dynamic(int fd, char *filename, char *cgiargs){
   setenv("QUERY_STRING", cgiargs, 1); // /key, value, overwrite check
   pid_t pid = fork(); //process id type
   if (pid == 0) {
-    dup2(fd, STDOUT_FILENO);
+    dup2(fd, STDOUT_FILENO); //duplicate to 
     char *argv[] = {filename, NULL}; //인자 없으므로 빈 값 넘김
     execve(filename, argv, environ); //environ은 C가 제공하는 기본 전역변수. QUERY_STRING도 들어있음
   } else {
     waitpid(pid, NULL, 0); // 기다릴pid, 상태저장 옵션
   }
 
- 
-
-
 }
-
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg) {
   char buf[MAXLINE];
