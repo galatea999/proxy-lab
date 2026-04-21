@@ -1,8 +1,15 @@
 #include <stdio.h>
+#include "csapp.h"
+
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
+
+void doit(int fd); //전방선언 (Forward Declaration)
+int parse_uri(char *uri, char *filename, char *cgiargs, char *path);
+void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
+                 char *longmsg);
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = //서버한테 요청 보낼 때 header에 넣어야 하는 값.
@@ -39,7 +46,8 @@ int main(int argc, char **argv) // argument count, argument vector(array)
 }
 
 void doit (int fd) {
-  char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+  char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE], hostname[MAXLINE], port[MAXLINE], path[MAXLINE];
+ 
   rio_t rio; //Robust I/O type. Buffer for parsing
   Rio_readinitb(&rio, fd);
   Rio_readlineb(&rio, buf, MAXLINE); // sizeof(buf) == MAXLINE
@@ -53,6 +61,52 @@ void doit (int fd) {
     clienterror(fd, method, "501", "Not Implemented", "Sorry, in this server I didn't implement this method");
     return;
   }
+  
+  //
+  int res = parse_uri(uri, hostname, port, path);
+  if (res<0) {
+    clienterror(fd, uri, "400", "Bad Request", "Inavalid URI");
+    return;
+  }
+
+  //Request를 재구성해서 서버로 전달
+  int serverfd = open_clientfd(hostname, port);
+  char request[MAXLINE];
+    sprintf(request, "%s %s HTTP/1.0\r\n", method, path);
+    Rio_writen(serverfd, request, strlen(request)); 
+    sprintf(request, "Host: %s:%s\r\n", hostname, port);
+    Rio_writen(serverfd, request, strlen(request)); 
+    sprintf(request, "%s", user_agent_hdr);
+    Rio_writen(serverfd, request, strlen(request)); 
+    sprintf(request, "Connection: close\r\n");
+    Rio_writen(serverfd, request, strlen(request));
+    sprintf(request, "Proxy-Connection: close\r\n");
+    Rio_writen(serverfd, request, strlen(request)); 
+    Rio_readlineb(&rio, buf, MAXLINE);
+    while (strcmp(buf, "\r\n")) { //끝까지
+      if (strstr(buf, "Host:")){ /* 스킵 */} 
+      else if (strstr(buf, "User-Agent:")){ /* 스킵 */}
+      else if (strstr(buf, "Connection:")){ /* 스킵 */}
+      else if (strstr(buf, "Proxy-Connection:")){ /* 스킵 */}
+      else {
+        Rio_writen(serverfd, buf, strlen(buf));
+      }
+      Rio_readlineb(&rio, buf, MAXLINE);
+      }
+    sprintf(request, "\r\n");
+    Rio_writen(serverfd, request, strlen(request));  
+
+  //서버에서 응답을 받음
+  rio_t server_rio;
+  Rio_readinitb(&server_rio, serverfd);
+
+  size_t n;
+  while ((n = Rio_readnb(&server_rio, buf, MAXLINE)) > 0) {
+    Rio_writen(fd, buf, n);
+  }
+
+  close(serverfd);
+
 }
 
   int parse_uri(char *uri, char *hostname, char *port, char *path){ 
@@ -80,3 +134,16 @@ void doit (int fd) {
     
   }
 
+void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg) {
+  char buf[MAXLINE];
+  sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "Content-type:text/html\r\n");
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "\r\n");
+  Rio_writen(fd, buf, strlen(buf)); 
+  sprintf(buf, "<html><b>원인 : %s</b><p>%s: %s</p></html>\r\n", cause, shortmsg, longmsg);
+  Rio_writen(fd, buf, strlen(buf)); 
+
+
+}
