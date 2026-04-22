@@ -10,6 +10,7 @@ void doit(int fd); //전방선언 (Forward Declaration)
 int parse_uri(char *uri, char *filename, char *cgiargs, char *path);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
+void * thread_func(void *arg);
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = //서버한테 요청 보낼 때 header에 넣어야 하는 값.
@@ -22,6 +23,7 @@ int main(int argc, char **argv) // argument count, argument vector(array)
   char hostname[MAXLINE], port[MAXLINE]; //
   socklen_t clientlen;
   struct sockaddr_storage clientaddr; // Ipv4와 Ipv6 둘 다 담을 수 있는 구조체
+  pthread_t tid;
 
   /* Check command line args */
   if (argc != 2) // when we type ./tiny 8000, argc=2, argv[0] = "./tiny", argv[1] = "8000"
@@ -40,9 +42,18 @@ int main(int argc, char **argv) // argument count, argument vector(array)
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE,
                 0); //Reverse DNS(getaddrinfo) : return host name, port 
     printf("Accepted connection from (%s, %s)\n", hostname, port);
-    doit(connfd);  // line:netp:tiny:doit / read write 역할을 해야 함
-    Close(connfd); // line:netp:tiny:close
+    pthread_create(&tid, NULL, thread_func, (void*)connfd);
   }
+}
+
+void * thread_func(void *arg) { //pthread_create에서 arg로 void*를 요구하기 때문에 여기서도 void로 받아주고 int로 바꿔줌
+  pthread_detach(pthread_self());
+  int fd = (int) arg;
+  doit(fd);
+  Close(fd);
+  return NULL;
+
+
 }
 
 void doit (int fd) {

@@ -23,6 +23,7 @@ int main(int argc, char **argv) // argument count, argument vector(array)
   char hostname[MAXLINE], port[MAXLINE]; //
   socklen_t clientlen;
   struct sockaddr_storage clientaddr; // Ipv4와 Ipv6 둘 다 담을 수 있는 구조체
+  
 
   /* Check command line args */
   if (argc != 2) // when we type ./tiny 8000, argc=2, argv[0] = "./tiny", argv[1] = "8000"
@@ -207,11 +208,18 @@ void serve_dynamic(int fd, char *filename, char *cgiargs){
     char *argv[] = {filename, NULL}; //인자 없으므로 빈 값 넘김
     execve(filename, argv, environ); //environ은 C가 제공하는 기본 전역변수. QUERY_STRING도 들어있음
   } else {
-    waitpid(pid, NULL, 0); // 기다릴pid, 상태저장 옵션
+    waitpid(pid, NULL, 0); // 기다릴 pid, 상태저장 옵션. 부모 프로세스가 자식 프로세스가 끝날 때까지 기다리는 함수 (wait process ID)
   }
 
 }
 
+// void sigchld_handler(int sig)
+// {
+
+//   while (waitpid(-1, NULL, WHOHANG > 0))
+//   ;
+
+// }
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg) {
   char buf[MAXLINE];
   sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
