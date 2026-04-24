@@ -153,18 +153,26 @@ void doit (int fd) {
 
   // 서버로 응답 보냄
   size_t n;
-  while ((n = Rio_readnb(&server_rio, buf, MAXLINE)) > 0) {
-    Rio_writen(fd, buf, n);
-    if (cache_size +n <= MAX_OBJECT_SIZE) {
+
+  int cacheable = 1;
+  while ((n = Rio_readnb(&server_rio, buf, MAXLINE)) > 0) { //serverfd가 보내는 HTTP 응답을 buf에 최대 MALINE 바이트씩 끊어서 넣음
+    Rio_writen(fd, buf, n); //한번에 다 받아오지 않는 이유 : 응답이 stream 형식이기 떄문에 한번에 다 들어온다는 보장이 없어서 버퍼 만들고 기다리는거임
       //caching 과정, 이어 붙임
+    
+    if (cacheable && cache_size + n <= MAX_OBJECT_SIZE){
     memcpy(cache_data+cache_size, buf, n); //offset 패턴 주의! 
     cache_size += n; 
+    } else {
+      cacheable = 0;
+    }
 
     }
     
-}
+if (cacheable) {
 cache_store(cache_key, cache_data, cache_size);
+}
 close(serverfd);
+
 
 }
 
