@@ -79,13 +79,14 @@ void * thread_func(void *arg) { //pthread_create에서 arg로 void*를 요구하
 }
 
 void doit (int fd) {
-  char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE], hostname[MAXLINE], port[MAXLINE], path[MAXLINE];
+  char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE], hostname[MAXLINE], port[MAXLINE], path[MAXLINE], cache_key[MAXLINE];
  
   rio_t rio; //Robust I/O type. Buffer for parsing
   Rio_readinitb(&rio, fd);
   Rio_readlineb(&rio, buf, MAXLINE); // sizeof(buf) == MAXLINE
   //now GET, /index.html, HTTP/1.1 \r\n is in buf (이거 직접 확인해 볼 수 없을까 디버깅 해보자 이따)
   sscanf(buf, "%s %s %s", method, uri, version); //scan and def string in buffer
+  strcpy(cache_key, uri);
   if (strcmp(method, "GET") != 0) {
     /* You should not use != when you compare string.
     * Why? Because String is pointer in C. But '!=' is for Address comparing.
@@ -113,7 +114,7 @@ void doit (int fd) {
   char cache_data[MAX_OBJECT_SIZE];
   int cache_size = 0;
   
-  if(cache_find(uri, cache_data, &cache_size)) { //signature가 int *이니, int인 cache_size의 주솟값을 보내야해서 &
+  if(cache_find(cache_key, cache_data, &cache_size)) { //signature가 int *이니, int인 cache_size의 주솟값을 보내야해서 &
     Rio_writen(fd, cache_data, cache_size); 
     return;
   }
@@ -162,7 +163,7 @@ void doit (int fd) {
     }
     
 }
-cache_store(uri, cache_data, cache_size);
+cache_store(cache_key, cache_data, cache_size);
 close(serverfd);
 
 }
