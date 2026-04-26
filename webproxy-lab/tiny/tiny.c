@@ -17,16 +17,17 @@ void serve_dynamic(int fd, char *filename, char *cgiargs);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
 
-int main(int argc, char **argv) // argument count, argument vector(array)
-{
-  int listenfd, connfd; // 기존에 만들었던 웹서버와는 달리 먼저 선언
+int main(int argc, char **argv) // argument count, argument vector(array) eg) ./tiny 8000 => argc = 2, argv[0] = .tiny, agrv[1] = 8000 
+{ /* argc, argv는 무엇이냐? 얘넨 정의하지 않아도OS가 알아서 파싱해서 넣어줌. 어디에도 없는 main만의 특권*/
+  int listenfd, connfd; 
   char hostname[MAXLINE], port[MAXLINE]; //
   socklen_t clientlen;
   struct sockaddr_storage clientaddr; // Ipv4와 Ipv6 둘 다 담을 수 있는 구조체
+  printf("Hello, Server is on now!\n");
   
 
   /* Check command line args */
-  if (argc != 2) // when we type ./tiny 8000, argc=2, argv[0] = "./tiny", argv[1] = "8000"
+  if (argc != 2) 
   {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
     exit(1);
@@ -40,7 +41,7 @@ int main(int argc, char **argv) // argument count, argument vector(array)
     connfd = Accept(listenfd, (SA *)&clientaddr,
                     &clientlen); // line:netp:tiny:accept
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE,
-                0); //Reverse DNS(getaddrinfo) : return host name, port 
+                0); //Reverse DNS(getaddrinfo) : return host name, port client addr의 이진데이터를 사람이 읽을 수 있는 문자열로 변환
     printf("Accepted connection from (%s, %s)\n", hostname, port);
     doit(connfd);  // line:netp:tiny:doit / read write 역할을 해야 함
     Close(connfd); // line:netp:tiny:close
@@ -62,7 +63,9 @@ void doit (int fd) {
   Rio_readinitb(&rio, fd);
   Rio_readlineb(&rio, buf, MAXLINE); // sizeof(buf) == MAXLINE
   //now GET, /index.html, HTTP/1.1 \r\n is in buf (이거 직접 확인해 볼 수 없을까 디버깅 해보자 이따)
+  printf("C는 이렇게 까지 해야합니까 %s", buf);
   sscanf(buf, "%s %s %s", method, uri, version); //scan and def string in buffer
+  printf("Browser request line %s\n", buf);
   if (strcmp(method, "GET") != 0) {
     /* You should not use != when you compare string.
     * Why? Because String is pointer in C. But '!=' is for Address comparing.
@@ -100,6 +103,9 @@ void doit (int fd) {
   
 }
 
+
+
+
 void read_requesthdrs(rio_t *rp) { //socket stream draining
     char buf[MAXLINE]; 
     Rio_readlineb(rp, buf, MAXLINE); //do - while pattern
@@ -134,6 +140,8 @@ void get_filetype(char *filename, char *filetype){
   strcpy(filetype, "image/gif"); //type/subtype
   else if (strstr(filename, "jpg"))
   strcpy(filetype, "image/jpeg");
+  else if (strstr(filename, "mpg"))
+  strcpy(filetype, "video/mpg");
   else
     strcpy(filetype, "application/octet-stream"); //Browser will down it
 }
@@ -164,15 +172,19 @@ void serve_static(int fd, char *filename, int filesize){
   Rio_writen(fd, buf, strlen(buf)); 
 
   // 2. Open File
-  int srcfd = open(filename, O_RDONLY, 0);
-  char *srcp = mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
+  int srcfd = open(filename, O_RDONLY, 0); //OS에게 파일 열어달라고 요청, 그러면 번호표(fd)만 돌려줌. 
+  void *srcpointer = malloc(filesize);
+  
+  // char *srcp = mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
+  rio_readn(srcfd, srcpointer, filesize); // mmap은 read 역할까지 해 줌.
   close(srcfd);
 
   //3 send file to socket
-  Rio_writen(fd, srcp, filesize);
+  Rio_writen(fd, srcpointer, filesize);
 
-  //4. munmap
-  munmap(srcp, filesize);
+  //4. munmap -> free
+  free(srcpointer);
+  //munmap(srcpointer, filesize);
 
 
 
